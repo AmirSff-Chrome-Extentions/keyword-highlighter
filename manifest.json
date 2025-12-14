@@ -1,0 +1,45 @@
+{
+    "manifest_version": 3,
+    "name": "Keyword Highlighter",
+    "version": "1.0",
+    "description": "Highlight positive and negative keywords on any page",
+    "permissions": ["storage", "activeTab", "scripting"],
+    "action": {
+        "default_popup": "popup.html",
+        "icons": {
+            "16": "files/icon.png",
+            "48": "files/icon.png",
+            "128": "files/icon.png"
+        },
+        "action": {
+            "default_icon": {
+                "16": "files/icon.png",
+                "48": "files/icon.png",
+                "128": "files/icon.png"
+            }
+        }
+    },
+    "commands": {
+        "run-search": {
+            "suggested_key": {
+                "default": "Alt+X"
+            },
+            "description": "Run saved keyword search"
+        }
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "content_scripts": [
+        {
+            "matches": ["<all_urls>"],
+            "js": ["content.js"],
+            "run_at": "document_idle"
+        }
+    ],
+    "icons": {
+        "16": "files/icon.png",
+        "48": "files/icon.png",
+        "128": "files/icon.png"
+    }
+}
