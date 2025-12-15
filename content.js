@@ -5,7 +5,10 @@ function escapeRegExp(str) {
 function highlightWords(words, color) {
     if (!words.length) return;
 
-    const regex = new RegExp(`\\b(${words.map(escapeRegExp).join('|')})\\b`, 'gi');
+    // const regex = new RegExp(`\\b(${words.map(escapeRegExp).join('|')})\\b`, 'gi');
+
+    const regex = new RegExp(`(${words.map(escapeRegExp).join('|')})`, 'gi');
+
 
     const walker = document.createTreeWalker(
         document.body,
@@ -13,9 +16,9 @@ function highlightWords(words, color) {
         {
             acceptNode(node) {
                 if (!node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
-                if (node.parentNode && node.parentNode.tagName === 'SPAN') {
-                    return NodeFilter.FILTER_REJECT;
-                }
+                // if (node.parentNode && node.parentNode.tagName === 'SPAN') {
+                //     return NodeFilter.FILTER_REJECT;
+                // }
                 return NodeFilter.FILTER_ACCEPT;
             }
         }
@@ -28,7 +31,10 @@ function highlightWords(words, color) {
     }
 
     textNodes.forEach(node => {
-        const matches = node.nodeValue.match(regex);
+        const text = node.nodeValue.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+        const matches = text.match(regex);
+
         if (!matches) return;
 
         const span = document.createElement('span');
@@ -44,12 +50,12 @@ chrome.runtime.onMessage.addListener((msg) => {
     const positive = msg.positive
         .split(',')
         .map(w => w.trim())
-        .filter(Boolean);
+        .filter(Boolean)
 
     const negative = msg.negative
         .split(',')
         .map(w => w.trim())
-        .filter(Boolean);
+        .filter(Boolean)
 
     highlightWords(positive, '#9aff9a');
     highlightWords(negative, '#ff9a9a');
