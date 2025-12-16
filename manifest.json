@@ -4,6 +4,12 @@
     "version": "1.0",
     "description": "Highlight positive and negative keywords on any page",
     "permissions": ["storage", "activeTab", "scripting"],
+    "web_accessible_resources": [
+        {
+            "resources": ["toast.html"],
+            "matches": ["<all_urls>"]
+        }
+    ],
     "action": {
         "default_popup": "popup.html",
         "icons": {

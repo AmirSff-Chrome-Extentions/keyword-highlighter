@@ -82,59 +82,108 @@ function highlightWords(words, color) {
     return matchCount;
 }
 
-function showToast(positiveCount, negativeCount) {
-    const existing = document.getElementById('keyword-highlighter-toast');
-    if (existing) {
-        existing.remove();
+let toastTemplatePromise = null;
+
+function loadToastTemplate() {
+    if (!toastTemplatePromise) {
+        const url = chrome.runtime.getURL('toast.html');
+
+        toastTemplatePromise = fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Failed to load toast template (${response.status})`);
+                }
+
+                return response.text();
+            })
+            .then(html => {
+                const container = document.createElement('div');
+                container.innerHTML = html.trim();
+                const template = container.querySelector('template');
+
+                if (!template) {
+                    throw new Error('Toast template does not contain a <template> element.');
+                }
+
+                return template;
+            })
+            .catch(error => {
+                console.error('Keyword Highlighter: unable to load toast template.', error);
+                toastTemplatePromise = null;
+                throw error;
+            });
     }
 
-    const total = positiveCount + negativeCount;
-    const rate = total ? Math.round(((positiveCount - negativeCount) / total) * 100) : 0;
-    const accentColor = rate < 0 ? '#e74c3c' : rate > 0 ? '#27ae60' : '#7f8c8d';
+    return toastTemplatePromise;
+}
 
-    const toast = document.createElement('div');
-    toast.id = 'keyword-highlighter-toast';
-    toast.style.position = 'fixed';
-    toast.style.left = '50%';
-    toast.style.bottom = '40px';
-    toast.style.transform = 'translate(-50%, 20px)';
-    toast.style.background = 'rgba(26, 26, 26, 0.92)';
-    toast.style.color = '#ffffff';
-    toast.style.padding = '14px 18px';
-    toast.style.borderRadius = '10px';
-    toast.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-    toast.style.fontSize = '14px';
-    toast.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.25)';
-    toast.style.zIndex = '2147483647';
-    toast.style.pointerEvents = 'none';
-    toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-    toast.style.opacity = '0';
-    toast.style.borderLeft = `4px solid ${accentColor}`;
+async function createToastElements() {
+    const template = await loadToastTemplate();
+    const fragment = template.content.cloneNode(true);
 
-    const ratePrefix = rate > 0 ? '+' : '';
+    const toast = fragment.querySelector('#keyword-highlighter-toast');
+    if (!toast) {
+        throw new Error('Toast element missing in template.');
+    }
 
-    toast.innerHTML = `
-        <div style="font-weight:600;margin-bottom:6px;">Keyword Highlighter</div>
-        <div>Positive: ${positiveCount}</div>
-        <div>Negative: ${negativeCount}</div>
-        <div style="margin-top:6px;font-weight:600;color:${accentColor};">Rate: ${ratePrefix}${rate}%</div>
-    `;
+    const host = document.createElement('div');
+    host.id = 'keyword-highlighter-toast-host';
 
-    document.body.appendChild(toast);
+    const shadowRoot = host.attachShadow({ mode: 'open' });
+    shadowRoot.appendChild(fragment);
 
-    requestAnimationFrame(() => {
-        toast.style.opacity = '1';
-        toast.style.transform = 'translate(-50%, 0)';
-    });
+    const positiveEl = shadowRoot.querySelector('[data-role="positive"]');
+    const negativeEl = shadowRoot.querySelector('[data-role="negative"]');
+    const rateEl = shadowRoot.querySelector('[data-role="rate"]');
 
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translate(-50%, 20px)';
-    }, 3500);
+    return { host, toast: shadowRoot.getElementById('keyword-highlighter-toast'), positiveEl, negativeEl, rateEl };
+}
 
-    setTimeout(() => {
-        toast.remove();
-    }, 3800);
+async function showToast(positiveCount, negativeCount) {
+    const existingHost = document.getElementById('keyword-highlighter-toast-host');
+    if (existingHost) {
+        existingHost.remove();
+    }
+
+    try {
+        const { host, toast, positiveEl, negativeEl, rateEl } = await createToastElements();
+
+        const total = positiveCount + negativeCount;
+        const rate = total ? Math.round(((positiveCount - negativeCount) / total) * 100) : 0;
+        const accentColor = rate < 0 ? '#e74c3c' : rate > 0 ? '#27ae60' : '#7f8c8d';
+        const ratePrefix = rate > 0 ? '+' : '';
+
+        if (positiveEl) {
+            positiveEl.textContent = `Positive: ${positiveCount}`;
+        }
+
+        if (negativeEl) {
+            negativeEl.textContent = `Negative: ${negativeCount}`;
+        }
+
+        if (rateEl) {
+            rateEl.textContent = `Rate: ${ratePrefix}${rate}%`;
+        }
+
+        toast.style.setProperty('--kh-accent', accentColor);
+
+        document.body.appendChild(host);
+
+        requestAnimationFrame(() => {
+            toast.classList.add('kh-show');
+        });
+
+        const hideTimeout = setTimeout(() => {
+            toast.classList.remove('kh-show');
+        }, 3500);
+
+        setTimeout(() => {
+            clearTimeout(hideTimeout);
+            host.remove();
+        }, 3800);
+    } catch (error) {
+        console.error('Keyword Highlighter: unable to display toast.', error);
+    }
 }
 
 function applyHighlights(positiveRaw, negativeRaw) {
@@ -146,7 +195,7 @@ function applyHighlights(positiveRaw, negativeRaw) {
     const positiveCount = highlightWords(positiveWords, '#9aff9a');
     const negativeCount = highlightWords(negativeWords, '#ff9a9a');
 
-    showToast(positiveCount, negativeCount);
+    void showToast(positiveCount, negativeCount);
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
@@ -166,7 +215,7 @@ document.addEventListener('keydown', (event) => {
 
     chrome.storage.sync.get(['positive', 'negative'], (data) => {
         if (!data.positive && !data.negative) {
-            showToast(0, 0);
+            void showToast(0, 0);
             return;
         }
 
